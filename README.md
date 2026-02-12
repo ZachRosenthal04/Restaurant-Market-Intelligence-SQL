@@ -16,3 +16,13 @@ Technical Skills Demonstrated
 Advanced SQL: Subqueries and complex CASE statements for business logic.
 
 Data Normalization: Merging datasets with 1,000x scale differences and cleaning "dirty" string data for numeric analysis.
+
+## Data Dictionary:
+Restaurant Market Intelligence: Data Dictionary
+Restaurant: String - The legal or trade name of the restaurant brand.
+Segment_Category: String - The specific industry niche (e.g., Burger, Steak, Chicken).
+Sales: Float - Total annual system-wide sales, typically expressed in Millions of USD.
+Units: Integer - The total number of physical locations/storefronts in operation.
+AUV_Thousands: Float - Average Unit Volume: Calculated as (Sales * 1000 / Units). Measures store-level efficiency.
+YOY_Sales: String - Year-Over-Year Sales: The percentage change in total sales compared to the previous year.
+Market_Status: String - A custom-calculated label identifying the brand's growth trajectory (e.g., Disruptor, Laggard).
