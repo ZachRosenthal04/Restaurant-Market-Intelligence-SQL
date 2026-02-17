@@ -29,7 +29,7 @@ def load_data():
     # Strip periods from the State column (e.g., 'N.Y.' becomes 'NY')
     df_ind['State'] = df_ind['State'].str.replace('.', '', regex=False).str.strip()
 
-    # The 'Translation' dictionary for your specific dataset quirks
+    # The 'Translation' dictionary the dataset quirks
     state_fix_map = {
          'Fla': 'FL',
          'Ill': 'IL',
@@ -56,7 +56,7 @@ def load_data():
          df_ind100.to_sql('ind100', conn, index=False, if_exists='replace')
 
          df_pop.to_sql('state_population', conn, index=False, if_exists='replace')
-         print("Database Initialized: 'top250','ind100', 'state_population tables created.")
+         print("Database Initialized: 'top250','ind100', 'state_population' tables created.")
 
 # --- 2. THE 'ADAPTIVE GROWTH' MODEL ---
 def run_market_analysis():
