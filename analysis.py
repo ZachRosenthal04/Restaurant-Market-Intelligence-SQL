@@ -7,64 +7,47 @@ Purpose: Integrating disparate restaurant datasets to identify high-growth
 
 import pandas as pd
 import sqlite3
-import os
 
 # --- 1. DATA INGESTION & DATABASE SETUP ---
-# Connect to SQLite (Creates 'restaurant_stats.db' if it doesn't exist)
+# Creating a global connection object for the script
 conn = sqlite3.connect('restaurant_stats.db')
 
 def load_data():
-    """Loads raw CSV data into a centralized SQL database."""
+    """Loads raw CSV data and standardizes state keys for relational joins."""
+    # Define file paths
     top250_path = 'Top250.csv' 
     ind100_path = 'Independence100.csv'
-      census_file_path = 'us_pop_by_state_2020.csv'    
-         
+    census_file_path = 'us_pop_by_state_2020.csv'    
     
+    # Read CSVs into DataFrames
     df_top250 = pd.read_csv(top250_path)
-    df_ind100 = pd.read_csv(ind100_path)
+    df_ind = pd.read_csv(ind100_path)
     df_pop = pd.read_csv(census_file_path)
     
-    df_top250.to_sql('top250', conn, index=False, if_exists='replace')
-
-    # Strip periods from the State column (e.g., 'N.Y.' becomes 'NY')
+    # --- CLEANING & NORMALIZATION ---
+    # Strip periods and whitespace from the State column (e.g., 'N.Y.' -> 'NY')
     df_ind['State'] = df_ind['State'].str.replace('.', '', regex=False).str.strip()
 
-    # The 'Translation' dictionary the dataset quirks
+    # Dictionary to bridge unconventional abbreviations to Census state_codes
     state_fix_map = {
-         'Fla': 'FL',
-         'Ill': 'IL',
-         'Nev': 'NV',
-         'Ind': 'IN',
-         'Pa': 'PA',
-         'Calif': 'CA',
-         'Ga': 'GA',
-         'Mich': 'MI',
-         'Mass': 'MA',
-         'Ore': 'OR',
-         'Tenn': 'TN',
-         'Colo': 'CO',
-         'Va': 'VA',
-         'Texas': 'TX'
-         }
+        'Fla': 'FL', 'Ill': 'IL', 'Nev': 'NV', 'Ind': 'IN', 'Pa': 'PA',
+        'Calif': 'CA', 'Ga': 'GA', 'Mich': 'MI', 'Mass': 'MA', 'Ore': 'OR',
+        'Tenn': 'TN', 'Colo': 'CO', 'Va': 'VA', 'Texas': 'TX'
+    }
 
-         # Apply the map to the 'State' column
-         # .fillna keeps original values if they aren't in the map (like 'NY' or 'NJ')
-         df_ind['State'] = df_ind['State'].map(state_fix_map).fillna(df_ind['State'])
+    # Apply the mapping
+    df_ind['State'] = df_ind['State'].map(state_fix_map).fillna(df_ind['State'])
 
-         # This adds a second table called 'ind100' to your existing database
-         df_ind.to_sql('ind100', conn, index=False, if_exists='replace')
-         df_ind100.to_sql('ind100', conn, index=False, if_exists='replace')
-
-         df_pop.to_sql('state_population', conn, index=False, if_exists='replace')
-         print("Database Initialized: 'top250','ind100', 'state_population' tables created.")
+    # Upload cleaned data to SQL tables
+    df_top250.to_sql('top250', conn, index=False, if_exists='replace')
+    df_ind.to_sql('ind100', conn, index=False, if_exists='replace')
+    df_pop.to_sql('state_population', conn, index=False, if_exists='replace')
+    
+    print("Database Initialized: 'top250','ind100', and 'state_population' tables created.")
 
 # --- 2. THE 'ADAPTIVE GROWTH' MODEL ---
 def run_market_analysis():
-    """
-    Analyzes segment-specific performance by re-calibrating 'Success' thresholds.
-    This identifies brands that outperform their category-specific economic baselines.
-    """
-    # This query cleans the YOY growth strings and applies the Adaptive Model logic
+    """Identifies brands outperforming category-specific economic baselines."""
     query = """
     SELECT 
         Restaurant,
@@ -72,7 +55,6 @@ def run_market_analysis():
         (Sales * 1000 / Units) AS AUV_Thousands,
         CAST(REPLACE(YOY_Sales, '%', '') AS FLOAT) AS YOY_Growth,
         CASE 
-            /* Adaptive Threshold: Different segments require different AUV benchmarks */
             WHEN Segment_Category = 'Steak' AND (Sales * 1000 / Units) > 5000 AND CAST(REPLACE(YOY_Sales, '%', '') AS FLOAT) > 10 THEN 'High-Growth Disruptor'
             WHEN Segment_Category = 'Chicken' AND (Sales * 1000 / Units) > 1000 AND CAST(REPLACE(YOY_Sales, '%', '') AS FLOAT) > 10 THEN 'High-Growth Disruptor'
             WHEN CAST(REPLACE(YOY_Sales, '%', '') AS FLOAT) < 0 THEN 'At-Risk Laggard'
@@ -84,7 +66,23 @@ def run_market_analysis():
     """
     return pd.read_sql(query, conn)
 
-# --- 3. EXECUTIVE SUMMARY AGGREGATION ---
+# --- 3. MARKET EFFICIENCY ANALYSIS ---
+def run_efficiency_analysis():
+    """Normalizes independent restaurant sales against US Census population data."""
+    query = """
+    SELECT 
+        p.state AS State_Name,
+        p."2020_census" AS Population,
+        SUM(r.Sales) AS Total_Sales,
+        ROUND((SUM(r.Sales) / CAST(p."2020_census" AS FLOAT)), 2) AS Dollars_Per_Person
+    FROM ind100 r
+    JOIN state_population p ON r.State = p.state_code
+    GROUP BY p.state
+    ORDER BY Dollars_Per_Person DESC;
+    """
+    return pd.read_sql(query, conn)
+
+# --- 4. EXECUTIVE SUMMARY AGGREGATION ---
 def get_executive_summary():
     """Counts Disruptors vs Laggards across key market segments."""
     query = """
@@ -108,15 +106,22 @@ def get_executive_summary():
     """
     return pd.read_sql(query, conn)
 
-# --- 4. EXECUTION & DISPLAY ---
+# --- 5. MASTER EXECUTION & DISPLAY ---
 if __name__ == "__main__":
+    # Initialize the data
+    load_data()
     
     print("\n--- PHASE 1: INDIVIDUAL BRAND CLASSIFICATION ---")
     analysis_df = run_market_analysis()
     print(analysis_df.head(10))
     
-    print("\n--- PHASE 2: EXECUTIVE MARKET SUMMARY ---")
+    print("\n--- PHASE 2: MARKET EFFICIENCY (Per Capita Spend) ---")
+    efficiency_df = run_efficiency_analysis()
+    print(efficiency_df.head(10)) 
+
+    print("\n--- PHASE 3: EXECUTIVE MARKET SUMMARY ---")
     summary_df = get_executive_summary()
     print(summary_df)
 
     conn.close()
+    print("\n✅ Analysis complete. Connection closed.")
